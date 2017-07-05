@@ -91,42 +91,42 @@ int main() {
           double py = j[1]["y"];
           double psi = j[1]["psi"];
           double v = j[1]["speed"];
-					double delta = j[1]["steering_angle"];
+          double delta = j[1]["steering_angle"];
 					
-					// Convert waypoints to vehicle coordinate frame
-					int num = ptsx.size();
+          // Convert waypoints to vehicle coordinate frame
+          int num = ptsx.size();
           Eigen::VectorXd ptsxV(num);
           Eigen::VectorXd ptsyV(num);
 					
-					for (int i = 0; i < num; i++) {
-						double deltaX = ptsx[i] - px;
-						double deltaY = ptsy[i] - py;
-						ptsxV[i] = deltaX * cos(psi) + deltaY * sin(psi);
-						ptsyV[i] = deltaY * cos(psi) - deltaX * sin(psi);					
-					} 
+          for (int i = 0; i < num; i++) {
+            double deltaX = ptsx[i] - px;
+            double deltaY = ptsy[i] - py;
+            ptsxV[i] = deltaX * cos(psi) + deltaY * sin(psi);
+            ptsyV[i] = deltaY * cos(psi) - deltaX * sin(psi);					
+          } 
 					
-					// Fit a polynomial to the above x and y coordinates
-					auto coeffs = polyfit(ptsxV, ptsyV, 2);
+          // Fit a polynomial to the above x and y coordinates
+          auto coeffs = polyfit(ptsxV, ptsyV, 2);
 		
-					// Since system has 100ms latency, predict key car state values 100ms into future
-					double dt_future = 0.1;
-					const double Lf = 2.67;
-					double px_new = v * dt_future;
-					double psi_new = - v * delta/Lf * dt_future;
+          // Since system has 100ms latency, predict key car state values 100ms into future
+          double dt_future = 0.1;
+          const double Lf = 2.67;
+          double px_new = v * dt_future;
+          double psi_new = - v * delta/Lf * dt_future;
 					
-					// Calculate the cross track error
-					double cte = polyeval(coeffs, 0.0);
+          // Calculate the cross track error
+          double cte = polyeval(coeffs, 0.0);
 					
-					// Calculate the orientation error
-					double epsi = atan(coeffs[1]);		
-					
-					// Define the state (px, py, psi are zero in vehicle coordinate frame)
-					Eigen::VectorXd state(6);
-				  state << px_new, 0, psi_new, v, cte, epsi;
+          // Calculate the orientation error
+          double epsi = atan(coeffs[1]);		
 
-					// Calculate steering angle and throttle using MPC
+          // Define the state (px, py, psi are zero in vehicle coordinate frame)
+          Eigen::VectorXd state(6);
+          state << px_new, 0, psi_new, v, cte, epsi;
+
+          // Calculate steering angle and throttle using MPC
           // Both are in between [-1, 1]
-					vector<double> control = mpc.Solve(state, coeffs);
+          vector<double> control = mpc.Solve(state, coeffs);
           double steer_value = control[0] / deg2rad(25);
           double throttle_value = control[1];
 				
@@ -146,17 +146,17 @@ int main() {
           msgJson["mpc_y"] = mpc_y_vals;
 
           // Display the waypoints/reference line
-					double x_step = 3.0;
-					int look_ahead = 30;
+          double x_step = 3.0;
+          int look_ahead = 30;
           vector<double> next_x_vals;
           vector<double> next_y_vals;
 					
-					for (int i = 0; i < look_ahead; i++) { 
-						double ideal_path_x = (double)i * x_step;
-						double ideal_path_y = polyeval(coeffs, ideal_path_x);
-						next_x_vals.push_back(ideal_path_x);
-						next_y_vals.push_back(ideal_path_y);
-					}
+          for (int i = 0; i < look_ahead; i++) { 
+            double ideal_path_x = (double)i * x_step;
+            double ideal_path_y = polyeval(coeffs, ideal_path_x);
+            next_x_vals.push_back(ideal_path_x);
+            next_y_vals.push_back(ideal_path_y);
+          }
 
           // Points in the simulator are connected by a Yellow line
           msgJson["next_x"] = next_x_vals;
