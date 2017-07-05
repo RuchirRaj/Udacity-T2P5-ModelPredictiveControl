@@ -1,7 +1,11 @@
 # CarND-Controls-MPC
 Self-Driving Car Engineer Nanodegree Program
 
+By: Chris Gundling
+
 ---
+
+<img src="images/MPC0.png" width="600">
 
 ## Dependencies
 
@@ -12,104 +16,69 @@ Self-Driving Car Engineer Nanodegree Program
   * Mac: [install Xcode command line tools to get make](https://developer.apple.com/xcode/features/)
   * Windows: [Click here for installation instructions](http://gnuwin32.sourceforge.net/packages/make.htm)
 * gcc/g++ >= 5.4
-  * Linux: gcc / g++ is installed by default on most Linux distros
-  * Mac: same deal as make - [install Xcode command line tools]((https://developer.apple.com/xcode/features/)
-  * Windows: recommend using [MinGW](http://www.mingw.org/)
-* [uWebSockets](https://github.com/uWebSockets/uWebSockets)
-  * Run either `install-mac.sh` or `install-ubuntu.sh`.
-  * If you install from source, checkout to commit `e94b6e1`, i.e.
-    ```
-    git clone https://github.com/uWebSockets/uWebSockets 
-    cd uWebSockets
-    git checkout e94b6e1
-    ```
-    Some function signatures have changed in v0.14.x. See [this PR](https://github.com/udacity/CarND-MPC-Project/pull/3) for more details.
 * Fortran Compiler
   * Mac: `brew install gcc` (might not be required)
-  * Linux: `sudo apt-get install gfortran`. Additionall you have also have to install gcc and g++, `sudo apt-get install gcc g++`. Look in [this Dockerfile](https://github.com/udacity/CarND-MPC-Quizzes/blob/master/Dockerfile) for more info.
+  * Linux: `sudo apt-get install gfortran`. Additionall you have also have to install gcc and g++, `sudo apt-get install gcc g++`.
 * [Ipopt](https://projects.coin-or.org/Ipopt)
-  * Mac: `brew install ipopt`
-  * Linux
-    * You will need a version of Ipopt 3.12.1 or higher. The version available through `apt-get` is 3.11.x. If you can get that version to work great but if not there's a script `install_ipopt.sh` that will install Ipopt. You just need to download the source from the Ipopt [releases page](https://www.coin-or.org/download/source/Ipopt/) or the [Github releases](https://github.com/coin-or/Ipopt/releases) page.
-    * Then call `install_ipopt.sh` with the source directory as the first argument, ex: `bash install_ipopt.sh Ipopt-3.12.1`. 
-  * Windows: TODO. If you can use the Linux subsystem and follow the Linux instructions.
 * [CppAD](https://www.coin-or.org/CppAD/)
   * Mac: `brew install cppad`
   * Linux `sudo apt-get install cppad` or equivalent.
-  * Windows: TODO. If you can use the Linux subsystem and follow the Linux instructions.
 * [Eigen](http://eigen.tuxfamily.org/index.php?title=Main_Page). This is already part of the repo so you shouldn't have to worry about it.
 * Simulator. You can download these from the [releases tab](https://github.com/udacity/self-driving-car-sim/releases).
 * Not a dependency but read the [DATA.md](./DATA.md) for a description of the data sent back from the simulator.
 
 
 ## Basic Build Instructions
-
-
 1. Clone this repo.
 2. Make a build directory: `mkdir build && cd build`
 3. Compile: `cmake .. && make`
 4. Run it: `./mpc`.
 
-## Tips
+## The Model
+This goal of this project was to implement Model Predictive Control (MPC) for an autonomous vehicle. MPC determines a vehicle trajectory with the lowest cost relative to the reference trajectory (waypoints) using an optimizer. Minimizing this cost functions allows for finding the appropriate actuations for the vehicle. To perform this type of control, a model of the vehicle must exist that defines the current state of the vehicle and the update equations to update that state at the following time step. A global kinematic model was used for this project that is described in further detail in the following section.
 
-1. It's recommended to test the MPC on basic examples to see if your implementation behaves as desired. One possible example
-is the vehicle starting offset of a straight line (reference). If the MPC implementation is correct, after some number of timesteps
-(not too many) it should find and track the reference line.
-2. The `lake_track_waypoints.csv` file has the waypoints of the lake track. You could use this to fit polynomials and points and see of how well your model tracks curve. NOTE: This file might be not completely in sync with the simulator so your solution should NOT depend on it.
-3. For visualization this C++ [matplotlib wrapper](https://github.com/lava/matplotlib-cpp) could be helpful.
+<img src="images/MPC1.png" width="600">
 
-## Editor Settings
+## Vehicle State, Actuators and Update
+In this project a global kinematic model was used to describe the state of the vehicle. This is a simplified model of the vehicle that does not consider things such as vehicle slip or the physics of the tire on the road surface. The vehicle state is defined by the vehicle position (Px, Py), the vehicle orientation (ψ) and the vehicle velocity (v) and the errors (cross track (cte) and orientation (eψ). The cte and orientation error are shown in the following figure.
 
-We've purposefully kept editor configuration files out of this repo in order to
-keep it as simple and environment agnostic as possible. However, we recommend
-using the following settings:
+<img src="images/MPC3.png" width="600">
 
-* indent using spaces
-* set tab width to 2 spaces (keeps the matrices in source code aligned)
+This gives the state vector as [x,y,ψ,v,cte,eψ]. The vehicle state will be updated based on the actuations (control) parameters of the vehicle. The following equations show the state update equations. 
 
-## Code Style
+<img src="images/MPC4.png" width="400">
 
-Please (do your best to) stick to [Google's C++ style guide](https://google.github.io/styleguide/cppguide.html).
+## Timestep Length and Elapsed Duration (N & dt)
+Two important parameters for the timestep length (N) and the timestep duration (dt). Multiplying these two parameters together determines the total time (T) for which future predictions are made with the model. N is the number of timesteps in the horizon and dt is how much time elapses between actuations. MPC attempts to approximate a continuous reference trajectory by means of discrete paths between actuations. Larger values of dt result in less frequent actuations, which makes it harder to accurately approximate a continuous reference trajectory.
 
-## Project Instructions and Rubric
+I started this project assuming that the total time (T) should be 1-2 seconds based on the lecture advice. Therefore, I started with N = 20 and dt = 0.1s. Having dt = 0.1s also meant that the timestep was equivalent to the built-in latency of the system. After trial and error in the simulator, I reduced N to be 15, but left dt = 0.1. This meant that less points needed to be optimized by the MPC, but still allowed for paths that projected far enough into the future for successful driving. 
 
-Note: regardless of the changes you make, your project must be buildable using
-cmake and make!
+## Overall MPC Process (Polynomial Fits, Preprocessing, etc…)
+This section covers the general process that was followed to implement the MPC algorithm. One important understanding is that when MPC is implemented, only the first set of control inputs is actually used for the vehicle. This brings the vehicle to a new state and then we repeat the process.
 
-More information is only accessible by people who are already enrolled in Term 2
-of CarND. If you are enrolled, see [the project page](https://classroom.udacity.com/nanodegrees/nd013/parts/40f38239-66b6-46ec-ae68-03afd8a601c8/modules/f1820894-8322-4bb3-81aa-b26b3c6dcbaf/lessons/b1ff3be0-c904-438e-aad3-2b5379f0e0c3/concepts/1a2255a0-e23c-44cf-8d41-39b8a3c8264a)
-for instructions and the project rubric.
+The following are the steps:
 
-## Hints!
+1. Initial setup - Define the length of the trajectory, N, and duration of each timestep, dt. Also define all the components of the cost function (state, actuators, etc) and their associated constants. Finally set the upper and lower bounds for all variables and constraints.
+2.	Get the current vehicle state from the simulator.
+3.	Convert the waypoint coordinates (reference trajectory) to the vehicles coordinate frame and then fit a polynomial to the waypoints.
+4.	Predict a new vehicle state at 100ms in the future to account for latency.
+5.	Calculate cross track error and orientation error values.
+6.	MPC Loop:
+- Pass the current state (considering latency) as the state to the model predictive controller.
+- We call the optimization solver. Given the state, the solver will return the vector of control inputs that minimizes the cost function.
+- Apply the control input to the vehicle.
+- Then repeat the 2-6 process.
 
-* You don't have to follow this directory structure, but if you do, your work
-  will span all of the .cpp files here. Keep an eye out for TODOs.
+## Polynomial Fits
+A polynomial fit is used to fit the waypoints of the reference path. After experimenting with both 2nd and 3rd order fits, I decided to use a second order fit. Both 2nd or 3rd order proved successful for getting the vehicle to drive, so I picked the simpler method.
 
-## Call for IDE Profiles Pull Requests
+## Tuning the Cost Function
+One of the most important findings of this project was the importance of tuning the cost function. Multiplying a part of the cost function by a value > 1 will add more influence to the solver in minimizing that parameter. For example, the sequential steering cost parameter was found to be the most influential parameter on vehicle performance and a multiplying factor of 60000 was used in my implementation. This resulted in smooth steering transitions and solved many of the oscillatory steering issues that I was originally facing. 
 
-Help your fellow students!
+## Latency
+In a real car there are delays as vehicle actuator commands propagate through the system.  The simulator for this project was setup to have a 100ms latency to create a realistic scenario for implementing the MPC. To make sure that I had implemented the MPC correctly, I first set the latency to 0ms. This allowed for tuning of the time constats and cost function constants without having to worry about latency. Once my model was able to drive the vehicle around the simulator track with no latency, I slowly increased the latency to see what effects it would have.
 
-We decided to create Makefiles with cmake to keep this project as platform
-agnostic as possible. Similarly, we omitted IDE profiles in order to we ensure
-that students don't feel pressured to use one IDE or another.
+With low latency (10-20ms), the vehicle would slightly oscillate about its path, but was still able to drive around the track. Once the latency was increased to 50ms, this was no longer the case and the oscillations about the reference path would grow uncontrollably.  This was addressed by applying the MPC to a future state. The current vehicle state and actuations are received from the simulator, at which point the vehicle state was updated 100ms forward in time. After trying different combinations of updates, I found that it was sufficient to only update the vehicles x-position and orientation. I believe that this is the case because in the vehicle’s coordinate frame the orientation is always zero, which means that y-position will not change (sin(0)=0). Using this technique, the oscillations were no longer noticeable and the vehicle drove successfully around the track at 70 mph with 100ms latency.
 
-However! I'd love to help people get up and running with their IDEs of choice.
-If you've created a profile for an IDE that you think other students would
-appreciate, we'd love to have you add the requisite profile files and
-instructions to ide_profiles/. For example if you wanted to add a VS Code
-profile, you'd add:
-
-* /ide_profiles/vscode/.vscode
-* /ide_profiles/vscode/README.md
-
-The README should explain what the profile does, how to take advantage of it,
-and how to install it.
-
-Frankly, I've never been involved in a project with multiple IDE profiles
-before. I believe the best way to handle this would be to keep them out of the
-repo root to avoid clutter. My expectation is that most profiles will include
-instructions to copy files to a new location to get picked up by the IDE, but
-that's just a guess.
-
-One last note here: regardless of the IDE used, every submitted project must
-still be compilable with cmake and make./
+## Conclusions
+The implemented MPC model was able to drive in the simulator at relatively high speed compared to the deep learning or PID methods that have been previously implemented. The MPC algorithm was also successfully able to handle 100ms of system latency. I was surprised at the amount of cost function parameter tuning (multiplication factors) that was required to reach a successful implementation. This appears to be the biggest area for potential improvement. A method similar to twiddle for the PID controller could be implemented to tune these multiplication factors. In addition, a dynamic model that considers many more details of the vehicle movement would be a significant improvement. To fully understand the benefits of the dynamic model, a more complex Unity simulator vehicle would also need to be implemented.
